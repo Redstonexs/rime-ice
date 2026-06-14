@@ -56,7 +56,14 @@ jobs:
             -DBUILD_TEST=OFF \
             -DBUILD_SHARED_LIBS=ON
           cmake --build build --target build_predict
-          ls -l build/bin/build_predict
+          # The plugin is its own CMake sub-project, so the tool lands under
+          # build/plugins/predict/bin/. Locate it robustly.
+          bp="$(find "$PWD/build" -type f -name 'build_predict' | head -1)"
+          if [ -z "$bp" ]; then
+            echo "build_predict not found under build/:"; find "$PWD/build" -name 'build_predict*'; exit 1
+          fi
+          echo "BUILD_PREDICT=$bp" >> "$GITHUB_ENV"
+          ls -l "$bp"
 
       - name: Generate prediction data
         run: |
@@ -65,7 +72,7 @@ jobs:
 
       - name: Build predict.db
         run: |
-          ./librime/build/bin/build_predict predict.db < predict.txt
+          "$BUILD_PREDICT" predict.db < predict.txt
           ls -l predict.db
           head -c 17 predict.db; echo
 

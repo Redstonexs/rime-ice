@@ -61,7 +61,7 @@ sudo apt-get install -y cmake ninja-build g++ \
   libleveldb-dev libmarisa-dev libyaml-cpp-dev libopencc-dev
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TEST=OFF
 cmake --build build --target build_predict
-# 得到 build/bin/build_predict
+# 插件是独立子项目，产物在 build/plugins/predict/bin/build_predict
 ```
 
 ### Windows / MSYS2（UCRT64，最小编译，无需编译整个 librime）
