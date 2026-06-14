@@ -1,0 +1,93 @@
+name: Build predict.db
+
+# 构建简体输入预测库 predict.db（librime-predict）。
+# 流程：编译 librime + predict 插件得到 build_predict -> 从 cn_dicts 生成预测数据
+#       -> build_predict 编译为 predict.db -> 上传产物（并在主仓库发布为 Release 资源）。
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "cn_dicts/**"
+      - "others/script/predict/**"
+      - ".github/workflows/predict.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build predict.db
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout rime-ice
+        uses: actions/checkout@v4
+        with:
+          path: rime-ice
+
+      - name: Checkout librime
+        uses: actions/checkout@v4
+        with:
+          repository: rime/librime
+          path: librime
+
+      - name: Checkout librime-predict plugin
+        uses: actions/checkout@v4
+        with:
+          repository: rime/librime-predict
+          path: librime/plugins/predict
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ \
+            libboost-dev libboost-regex-dev \
+            libgoogle-glog-dev libgflags-dev \
+            libleveldb-dev libmarisa-dev libyaml-cpp-dev libopencc-dev
+
+      - name: Build build_predict (librime + plugin)
+        working-directory: librime
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TEST=OFF \
+            -DBUILD_SHARED_LIBS=ON
+          cmake --build build --target build_predict
+          ls -l build/bin/build_predict
+
+      - name: Generate prediction data
+        run: |
+          python3 rime-ice/others/script/predict/gen_predict_data.py -o predict.txt
+          echo "records: $(wc -l < predict.txt)"
+
+      - name: Build predict.db
+        run: |
+          ./librime/build/bin/build_predict predict.db < predict.txt
+          ls -l predict.db
+          head -c 17 predict.db; echo
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: predict-db
+          path: |
+            predict.db
+            predict.txt
+
+      # 仅在官方仓库发布为 Release 资源（独立 tag，不影响主发布流程）
+      - name: Publish release asset
+        if: ${{ github.repository == 'iDvel/rime-ice' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: predict
+          name: "输入预测库 predict.db"
+          body: |
+            简体中文输入预测库，配合 librime-predict 使用。
+
+            - `predict.db`：预测库二进制（放入 Rime 用户文件夹）
+            - 部署教程：others/docs/Prediction.md
+          make_latest: false
+          files: predict.db
