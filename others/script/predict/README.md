@@ -115,3 +115,7 @@ predict_data_tool --from txt --to leveldb --input predict.txt --output predict.u
 # 或 Python 工具（需 pip install plyvel）：
 python3 scripts/predict_data_tool.py --from txt --to leveldb --input predict.txt --output predict.userdb
 ```
+
+CI 已自动跑通上述流程：[`.github/workflows/predict_leveldb.yml`](../../../.github/workflows/predict_leveldb.yml)
+在 Linux 上生成 `predict.txt`、用 `predict_data_tool.py` 转出 `predict.userdb` 并上传为产物；
+官方仓库还会打包发布到 `predict-leveldb` tag 的 Release。可在 Actions 页面手动触发（workflow_dispatch）。

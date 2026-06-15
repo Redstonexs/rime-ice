@@ -1,0 +1,88 @@
+name: Build predict.userdb (leveldb seed)
+
+# 构建「按上屏历史学习」预测插件 librime-predict-leveldb 的种子用户库 predict.userdb。
+# 流程：从 cn_dicts 生成 predict.txt（gen_predict_data.py）
+#       -> 用插件自带的 scripts/predict_data_tool.py 转为 LevelDB 用户库 predict.userdb
+#       -> 上传为构建产物（并在主仓库发布为 Release 资源）。
+# 说明：predict.userdb 是「预热」种子数据，导入后插件仍会继续按你的上屏历史学习。
+#       部署与配置见 others/docs/Prediction.md 第七节。
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "cn_dicts/**"
+      - "others/script/predict/**"
+      - ".github/workflows/predict_leveldb.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build predict.userdb
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout rime-ice
+        uses: actions/checkout@v4
+
+      - name: Checkout librime-predict-leveldb (data tool)
+        uses: actions/checkout@v4
+        with:
+          repository: fxliang/librime-predict-leveldb
+          path: predict-leveldb
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (plyvel)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libleveldb-dev
+          python -m pip install --upgrade pip
+          pip install plyvel
+
+      - name: Generate prediction data (predict.txt)
+        run: |
+          python3 others/script/predict/gen_predict_data.py -o predict.txt
+          echo "records: $(wc -l < predict.txt)"
+
+      - name: Convert predict.txt -> predict.userdb (LevelDB)
+        run: |
+          python3 predict-leveldb/scripts/predict_data_tool.py \
+            --from txt --to leveldb --input predict.txt --output predict.userdb
+          echo "userdb contents:"; ls -l predict.userdb
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: predict-userdb
+          path: |
+            predict.userdb
+            predict.txt
+
+      # 仅在官方仓库发布为 Release 资源（独立 tag，不影响主发布流程）
+      - name: Package userdb for release
+        if: ${{ github.repository == 'iDvel/rime-ice' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') }}
+        run: |
+          zip -r predict.userdb.zip predict.userdb
+          ls -l predict.userdb.zip
+
+      - name: Publish release asset
+        if: ${{ github.repository == 'iDvel/rime-ice' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: predict-leveldb
+          name: "输入预测种子库 predict.userdb（librime-predict-leveldb）"
+          body: |
+            「按上屏历史学习」预测插件 librime-predict-leveldb 的种子用户库（从雾凇词库生成）。
+
+            - `predict.userdb.zip`：解压得到 predict.userdb/ 目录，放进 Rime 用户文件夹
+            - 配合 predictor 的 `legacy_mode: false` 使用；导入后仍会按你的上屏历史继续学习
+            - 部署教程：others/docs/Prediction.md 第七节
+          make_latest: false
+          files: predict.userdb.zip

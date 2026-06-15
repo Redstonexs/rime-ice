@@ -181,6 +181,10 @@ patch:
 
 ### 7.3 用词库预热用户库 / 导入导出
 
+> 懒人方案：可直接从本仓库 **Actions / Release 的 `predict-leveldb` 资源**下载预构建的
+> `predict.userdb`（由 `.github/workflows/predict_leveldb.yml` 用下述同样流程生成），
+> 解压放进用户文件夹即可，跳过本节的手动构建。
+
 插件随附数据工具，可在 LevelDB 用户库与文本之间互转。文本为制表符分隔：
 `prefix<TAB>word<TAB>weight`（可扩展为 `…<TAB>commits<TAB>dee<TAB>tick`）。
 
