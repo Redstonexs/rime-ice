@@ -28,3 +28,18 @@ patch:
     db: predict.db      # 预测库文件名（位于用户文件夹 / 共享文件夹）
     max_candidates: 5   # 每次最多显示的预测候选数；设为与 menu/page_size 一致可避免句号触发翻页
     max_iterations: 2   # 连续预测的最大次数；0 表示不限制
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # 备选后端：librime-predict-leveldb（按上屏历史学习，越用越准）
+  #   https://github.com/fxliang/librime-predict-leveldb
+  # 与上面的原版 librime-predict【二选一】：组件同名（predictor / predict_translator），
+  # 不能同时启用。需前端的 librime 在编译时带了该插件（目前发行版自带的通常是原版）。
+  # 用法：注释/删除上面的 predictor 块，改用下面这套（详见 others/docs/Prediction.md 第七节）：
+  #
+  #   predictor:
+  #     predictdb: predict.userdb         # LevelDB 用户库（首次部署自动创建于用户目录）
+  #     max_candidates: 5
+  #     max_iterations: 1                 # 连续预测次数；0 表示不限制
+  #     max_commit_interval_seconds: 30   # 两次上屏间隔超过该秒数则不建立关联
+  #     legacy_mode: false                # true 则退回原版、改读下面的静态 db
+  #     db: predict.db                    # 仅 legacy_mode: true 时使用

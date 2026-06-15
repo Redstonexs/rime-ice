@@ -7,6 +7,10 @@
 > **简体** `predict.db`，预测项按词频排序，例如：
 > `北京 → 市 / 大学 / 时间`，`苹果 → 电脑 / 公司`，`谢谢 → 合作 / 大家`。
 
+> 进阶：想让预测**按你自己的上屏历史学习、越用越准**，可改用 fxliang 的
+> [librime-predict-leveldb](https://github.com/fxliang/librime-predict-leveldb)，
+> 把「上一个词 → 下一个词」的搭配记进个人词库，见下文 **第七节**。
+
 效果示意：上屏「中华」后，候选区出现「人民共和国 / 民族 / 民国 …」可直接选用。
 
 ---
@@ -121,3 +125,78 @@ python others/script/predict/gen_predict_data.py -o dist/predict.txt
 # 2) 用 build_predict 编译为 predict.db（build_predict 的获取见上面的 README）
 BUILD_PREDICT=/path/to/build_predict bash others/script/predict/build.sh
 ```
+
+---
+
+## 七、进阶：按你的上屏历史学习预测（librime-predict-leveldb）
+
+上面的 `predict.db` 是**静态词库**预测：内容固定，不随你的使用变化。如果希望预测能
+**根据你自己上屏的历史**自我学习、越用越准，可改用 fxliang 的
+[**librime-predict-leveldb**](https://github.com/fxliang/librime-predict-leveldb)
+（基于 `rime/librime-predict` 的改版）。
+
+它把你**连续上屏的词**记录到 LevelDB 用户库 `predict.userdb`：「上一个词 → 下一个词」
+的搭配会被持续记录、加权，预测因此逐渐贴合你的个人用法。两次上屏间隔过久（默认 30 秒）
+则不建立关联，避免把不相关的输入串到一起。
+
+> ⚠️ **这是另一个插件。** 它和上面用的 `rime/librime-predict` 是两套实现，组件名相同
+> （`predictor` / `predict_translator`），**不能同时启用**。要用它，前端的 librime 必须在
+> **编译时带上 librime-predict-leveldb**——目前各发行版自带的通常是原版 librime-predict，
+> 并没有它。需自行把它作为 librime 插件编译，或使用已内置它的前端 / Weasel 构建。
+
+### 7.1 配置补丁
+
+把 `rime_ice.custom.yaml` 里的 `predictor` 块换成下面这套（处理器挂载、开关与第二节相同）：
+
+```yaml
+patch:
+  "engine/processors/@after 0": predictor
+  "engine/translators/@before 0": predict_translator
+  "switches/+":
+    - name: prediction
+      states: [ 关闭预测, 开启预测 ]
+      reset: 1            # 部署后默认开启；删掉此行则默认关闭
+  predictor:
+    predictdb: predict.userdb            # LevelDB 用户库（首次部署自动创建于用户目录）
+    max_candidates: 5                    # 每次最多显示的预测候选数
+    max_iterations: 1                    # 连续预测次数；0 表示不限制
+    max_commit_interval_seconds: 30      # 两次上屏间隔超过该秒数则不建立关联
+    legacy_mode: false                   # false=学习模式(leveldb)；true=退回原版、改读下面的 db
+    db: predict.db                       # 仅 legacy_mode: true 时使用
+```
+
+- **空库起步**：`predict.userdb` 不存在时会自动创建，从零开始学——刚装时没有预测，随使用
+  逐渐出现。
+- **用词库预热（推荐）**：先把本仓库词库生成的 `predict.txt` 灌进用户库，开局即有静态预测，
+  之后再叠加你的历史（见 7.3）。
+- **沿用旧库**：若只想用原来的静态 `predict.db`、不想学习，设 `legacy_mode: true` 即可，
+  配置与第二节等价。
+
+### 7.2 部署
+
+与第三 / 四节完全一样：把（用 7.1 内容的）`rime_ice.custom.yaml` 放进 Rime 用户文件夹并
+**重新部署**。`predict.userdb` 会在用户目录自动生成，**无需手动放入 `predict.db`**
+（除非 `legacy_mode: true`）。开关、触发方式、注意事项均同上。双拼用户照样把补丁打到自己
+正在用的方案上。
+
+### 7.3 用词库预热用户库 / 导入导出
+
+插件随附数据工具，可在 LevelDB 用户库与文本之间互转。文本为制表符分隔：
+`prefix<TAB>word<TAB>weight`（可扩展为 `…<TAB>commits<TAB>dee<TAB>tick`）。
+
+```bash
+# 1) 用本仓库词库生成预热数据（纯 Python，无依赖）
+python others/script/predict/gen_predict_data.py -o predict.txt
+
+# 2) 文本 → LevelDB 用户库（任选其一）
+#   A) C++ 工具（随插件一起编译的产物）
+predict_data_tool --from txt --to leveldb --input predict.txt --output predict.userdb
+#   B) Python 工具（需 pip install plyvel）
+python3 scripts/predict_data_tool.py --from txt --to leveldb --input predict.txt --output predict.userdb
+
+# 备份 / 检查：用户库 → 文本
+predict_data_tool --from leveldb --to txt --input predict.userdb --output predict.txt
+```
+
+把生成的 `predict.userdb` 放进用户文件夹（配合 `legacy_mode: false`），即可
+「带着词库知识开局、再随上屏历史持续学习」。

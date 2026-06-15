@@ -97,3 +97,21 @@ g++ -std=c++17 -O2 \
 [`.github/workflows/predict.yml`](../../../.github/workflows/predict.yml) 在 Linux 上按上面
 「Linux」流程编译 `build_predict`，生成 `predict.db`，上传为构建产物；官方仓库还会发布到
 `predict` tag 的 Release。可在 Actions 页面手动触发（workflow_dispatch）。
+
+## 备选：librime-predict-leveldb（按上屏历史学习）
+
+[librime-predict-leveldb](https://github.com/fxliang/librime-predict-leveldb) 是 fxliang 基于
+`rime/librime-predict` 的改版，用 LevelDB 用户库 `predict.userdb` 取代静态 `predict.db`，
+能持续记录你**连续上屏的词**并自我加权（部署、配置见
+[`others/docs/Prediction.md`](../../docs/Prediction.md) 第七节）。
+
+本目录生成的 `predict.txt`（3 列 `key<TAB>text<TAB>weight`）可直接作为它的**预热语料**，
+用插件随附的数据工具导入用户库：
+
+```bash
+python gen_predict_data.py -o predict.txt   # 或直接用 dist/predict.txt
+# C++ 工具（随插件编译产物）：
+predict_data_tool --from txt --to leveldb --input predict.txt --output predict.userdb
+# 或 Python 工具（需 pip install plyvel）：
+python3 scripts/predict_data_tool.py --from txt --to leveldb --input predict.txt --output predict.userdb
+```
